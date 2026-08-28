@@ -100,13 +100,21 @@ For every scenario, include exactly these fields:
 - Recommended Test Layer
 - Priority
 - Automation Candidate: Yes / No
-- Notes / Risks (if applicable)
+- Notes / Risks
+
+Every listed field is mandatory.
+
+If no Notes / Risks apply, use `—`.
+
+If any required field is omitted from a generated scenario, the output is non-compliant and must be corrected before completion.
 
 ## Expected Result Rule
 
 Expected results must come only from confirmed CLEAN Sprint 5 Toolshop knowledge.
 
 Never fabricate a selector, endpoint, payload, status code, validation, financial calculation, business rule, quantity boundary, workflow state, or expected behavior.
+
+Do not place `Needs Human Review` or `Not confirmed from clean Sprint 5 source` only in Notes / Risks while presenting an unconfirmed or conflicting behavior as a definitive Expected Result.
 
 If clean sources conflict, mark the scenario's Expected Result:
 
@@ -128,15 +136,44 @@ Where applicable, reference the relevant business rule, user flow, API contract,
 
 Do not cite buggy behavior as a requirement.
 
+## Completion Self-Check
+
+Before reporting scenario generation as complete, validate every generated scenario against this agent definition.
+
+Confirm that:
+
+- every required output field is present
+- every scenario contains a valid `Test Design Technique`
+- no unconfirmed or conflicting behavior is presented as a definitive Expected Result
+- `Needs Human Review` appears in Expected Result when clean sources conflict
+- `Not confirmed from clean Sprint 5 source` appears in Expected Result when clean evidence is insufficient
+- no requirement, selector, endpoint, payload, status code, calculation, boundary, or expected behavior was fabricated
+- every definitive Expected Result has traceable CLEAN Sprint 5 evidence; otherwise the Expected Result uses the required governance status
+- no scenario was derived from `sprint5-with-bugs/**`, another sprint, known-bug lists, bug reports, defect seeds, or answer-key material
+
+If any generated scenario fails this self-check, correct it before reporting completion.
+
 ## Output Location
 
-When invoked for a feature or Full Suite, write the generated scenarios to:
+When invoked for a single feature or flow, write the generated scenarios to:
 
 `docs/generated/test-scenarios/<feature-name>-test-scenarios.md`
 
 Kebab-case the feature name.
 
-Create the `docs/generated/test-scenarios/` directory only at invocation time if it does not already exist. Never create generated scenario artifacts proactively.
+When invoked with an explicitly supplied multi-feature assignment scope or `Full Suite`, create one scenario file per logical feature/module rather than combining unrelated modules into one oversized file.
+
+Use:
+
+`docs/generated/test-scenarios/<feature-name>-test-scenarios.md`
+
+for each generated module.
+
+Do not duplicate the same scenario across multiple module files. Use cross-references where appropriate.
+
+Create the `docs/generated/test-scenarios/` directory only at invocation time if it does not already exist.
+
+Never create generated scenario artifacts proactively.
 
 ## Invocation
 
