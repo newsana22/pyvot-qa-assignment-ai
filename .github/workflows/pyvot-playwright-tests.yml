@@ -6,7 +6,7 @@
 #   Actions and uploads the Playwright HTML report as execution evidence.
 #
 # TRIGGER:
-#   - Push to main
+#   - Push to main or pyvot-assignment-feature
 #   - Manual execution from GitHub Actions
 #
 # NOTES:
@@ -21,7 +21,9 @@ name: Pyvot QA - Playwright Regression
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - pyvot-assignment-feature
 
   workflow_dispatch:
 
