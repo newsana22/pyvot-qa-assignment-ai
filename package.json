@@ -3,10 +3,18 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
-  "scripts": {},
+
+  "scripts": {
+    "test": "playwright test --config=playwright.config.js --workers=1",
+    "test:api": "playwright test tests/api --config=playwright.config.js --project=api --workers=1",
+    "test:ui": "playwright test tests/ui --config=playwright.config.js --project=ui --workers=1",
+    "report": "playwright show-report"
+  },
+
   "keywords": [],
   "author": "",
   "license": "ISC",
+
   "devDependencies": {
     "@faker-js/faker": "^10.4.0",
     "@playwright/test": "^1.53.1",
