@@ -1,0 +1,88 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# Pyvot Assignment - Playwright QA Regression
+#
+# PURPOSE:
+#   Runs the assignment-owned Playwright API + UI regression suite in GitHub
+#   Actions and uploads the Playwright HTML report as execution evidence.
+#
+# TRIGGER:
+#   - Push to main
+#   - Manual execution from GitHub Actions
+#
+# NOTES:
+#   - Runs against the CLEAN Toolshop environment by default
+#   - UI/API base URLs are passed through environment variables
+#   - playwright.config.js uses the same suite/assertions for CLEAN or BUGGY
+#   - Runs sequentially with 1 worker for stable CI execution
+#   - Keeps this QA pipeline separate from the original Toolshop workflows
+# ══════════════════════════════════════════════════════════════════════════════
+
+name: Pyvot QA - Playwright Regression
+
+on:
+  push:
+    branches: [main]
+
+  workflow_dispatch:
+
+concurrency:
+  group: pyvot-playwright-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22'
+  UI_BASE_URL: 'https://practicesoftwaretesting.com'
+  API_BASE_URL: 'https://api.practicesoftwaretesting.com'
+
+jobs:
+  playwright:
+    name: Run Pyvot Playwright Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # ── Checkout repository ────────────────────────────────────────────────
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ── Setup Node.js ─────────────────────────────────────────────────────
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      # ── Install exact dependencies from package-lock.json ─────────────────
+      - name: Install dependencies
+        run: npm ci
+
+      # ── Install Chromium and required Linux dependencies ──────────────────
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium --with-deps
+
+      # ── Run assignment API + UI regression suite ──────────────────────────
+      #
+      # package.json:
+      #   npm test
+      #   → playwright test --config=playwright.config.js --workers=1
+      #
+      # playwright.config.js also provides:
+      #   - CI retry = 1
+      #   - HTML + line reporters
+      #   - screenshots on failure
+      #   - video retained on failure
+      #   - trace on first retry
+      #
+      - name: Run Playwright regression suite
+        run: npm test
+
+      # ── Upload Playwright HTML report ─────────────────────────────────────
+      # Always upload the report even if the regression suite fails.
+      - name: Upload Playwright HTML report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pyvot-playwright-report-${{ github.run_id }}
+          path: playwright-report/
+          retention-days: 30
