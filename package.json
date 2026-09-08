@@ -3,21 +3,23 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
-
   "scripts": {
     "test": "playwright test --config=playwright.config.js --workers=1",
     "test:api": "playwright test tests/api --config=playwright.config.js --project=api --workers=1",
     "test:ui": "playwright test tests/ui --config=playwright.config.js --project=ui --workers=1",
+    "test:clean": "cross-env UI_BASE_URL=https://practicesoftwaretesting.com API_BASE_URL=https://api.practicesoftwaretesting.com playwright test --config=playwright.config.js --workers=1",
+    "test:buggy": "cross-env UI_BASE_URL=https://with-bugs.practicesoftwaretesting.com API_BASE_URL=https://api-with-bugs.practicesoftwaretesting.com playwright test --config=playwright.config.js --workers=1",
+    "test:buggy:api": "cross-env API_BASE_URL=https://api-with-bugs.practicesoftwaretesting.com playwright test tests/api --config=playwright.config.js --project=api --workers=1",
+    "test:buggy:ui": "cross-env UI_BASE_URL=https://with-bugs.practicesoftwaretesting.com playwright test tests/ui --config=playwright.config.js --project=ui --workers=1",
     "report": "playwright show-report"
   },
-
   "keywords": [],
   "author": "",
   "license": "ISC",
-
   "devDependencies": {
     "@faker-js/faker": "^10.4.0",
     "@playwright/test": "^1.53.1",
-    "@types/node": "^24.0.7"
+    "@types/node": "^24.0.7",
+    "cross-env": "^10.1.0"
   }
 }

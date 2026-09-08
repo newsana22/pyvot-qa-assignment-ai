@@ -15,6 +15,8 @@
 #   - playwright.config.js uses the same suite/assertions for CLEAN or BUGGY
 #   - Runs sequentially with 1 worker for stable CI execution
 #   - Keeps this QA pipeline separate from the original Toolshop workflows
+#   - Uses Google Chrome for UI execution when playwright.config.js sets
+#     channel: 'chrome'
 # ══════════════════════════════════════════════════════════════════════════════
 
 name: Pyvot QA - Playwright Regression
@@ -59,9 +61,21 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # ── Install Chromium and required Linux dependencies ──────────────────
-      - name: Install Playwright Chromium
-        run: npx playwright install chromium --with-deps
+      # ── Install Playwright Linux browser dependencies ─────────────────────
+      #
+      # NEW:
+      # We are testing CI with real Google Chrome instead of the Playwright-
+      # downloaded Chromium binary.
+      #
+      # playwright.config.js will use:
+      #   channel: 'chrome'
+      #
+      # GitHub ubuntu-latest runners already provide Google Chrome.
+      # Therefore we only install the Linux dependencies Playwright needs
+      # to launch and control the browser.
+      #
+      - name: Install Playwright browser dependencies
+        run: npx playwright install-deps
 
       # ── Run assignment API + UI regression suite ──────────────────────────
       #
