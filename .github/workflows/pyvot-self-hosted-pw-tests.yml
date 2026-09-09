@@ -1,0 +1,81 @@
+name: Pyvot QA - Self-Hosted Regression
+
+# Manual execution only.
+# Important because the repository is public and this job runs on a personal machine.
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment to test"
+        required: true
+        default: "clean"
+        type: choice
+        options:
+          - clean
+          - buggy
+
+jobs:
+  playwright-tests:
+    name: Run Playwright Tests - Self Hosted
+
+    runs-on: [self-hosted, Windows, X64]
+
+    env:
+      NODE_VERSION: "22"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install project dependencies
+        run: npm.cmd ci
+
+      # Installs Playwright-managed browser support binaries such as FFmpeg.
+      - name: Install Playwright browser support
+        run: npx.cmd playwright install
+
+      - name: Configure test environment
+        shell: powershell
+        run: |
+          if ("${{ github.event.inputs.environment }}" -eq "buggy") {
+            "TEST_ENVIRONMENT=BUGGY" | Out-File -FilePath $env:GITHUB_ENV -Append
+            "UI_BASE_URL=https://with-bugs.practicesoftwaretesting.com" | Out-File -FilePath $env:GITHUB_ENV -Append
+            "API_BASE_URL=https://api-with-bugs.practicesoftwaretesting.com" | Out-File -FilePath $env:GITHUB_ENV -Append
+          }
+          else {
+            "TEST_ENVIRONMENT=CLEAN" | Out-File -FilePath $env:GITHUB_ENV -Append
+            "UI_BASE_URL=https://practicesoftwaretesting.com" | Out-File -FilePath $env:GITHUB_ENV -Append
+            "API_BASE_URL=https://api.practicesoftwaretesting.com" | Out-File -FilePath $env:GITHUB_ENV -Append
+          }
+
+      - name: Display selected environment
+        shell: powershell
+        run: |
+          Write-Host "Environment: $env:TEST_ENVIRONMENT"
+          Write-Host "UI Base URL: $env:UI_BASE_URL"
+          Write-Host "API Base URL: $env:API_BASE_URL"
+
+      - name: Run API and UI Playwright tests
+        run: npm.cmd test
+
+      - name: Upload Playwright HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pyvot-self-hosted-${{ env.TEST_ENVIRONMENT }}-playwright-report-${{ github.run_id }}
+          path: playwright-report/
+          retention-days: 7
+
+      - name: Upload Playwright test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pyvot-self-hosted-${{ env.TEST_ENVIRONMENT }}-test-results-${{ github.run_id }}
+          path: test-results/
+          retention-days: 7
