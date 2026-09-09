@@ -23,8 +23,9 @@
 # NOTES:
 #   - Runs sequentially with 1 worker for stable CI execution
 #   - Keeps this QA pipeline separate from the original Toolshop workflows
-#   - Installs Playwright browser/support binaries and Linux dependencies
-#   - Includes FFmpeg required for retained failure videos
+#   - Uses a GitHub-hosted Windows runner
+#   - Installs Playwright-managed browser/support binaries including Chromium
+#   - Includes FFmpeg support used for retained failure videos
 # ══════════════════════════════════════════════════════════════════════════════
 
 name: Pyvot QA - Playwright Regression
@@ -61,8 +62,8 @@ jobs:
 
     name: Run Pyvot Playwright Tests
 
-    # GitHub-hosted Linux runner.
-    runs-on: ubuntu-latest
+    # GitHub-hosted Windows runner.
+    runs-on: windows-latest
 
     timeout-minutes: 30
 
@@ -86,16 +87,15 @@ jobs:
       # versions committed in the repository.
       #
       - name: Install dependencies
-        run: npm ci
+        shell: pwsh
+        run: npm.cmd ci
 
-      # ── Install Playwright browser binaries + Linux dependencies ──────────
+      # ── Install Playwright-managed browser binaries ───────────────────────
       #
       # Installs Playwright-managed browsers including Chromium.
       #
-      # It also installs:
-      #   - required Linux dependencies
-      #   - Playwright support binaries
-      #   - FFmpeg used for retained failure videos
+      # It also installs Playwright support binaries such as FFmpeg,
+      # which is used for retained failure videos.
       #
       # playwright.config.js does NOT specify:
       #
@@ -103,8 +103,9 @@ jobs:
       #
       # Therefore Playwright uses its managed Chromium browser.
       #
-      - name: Install Playwright browsers and dependencies
-        run: npx playwright install --with-deps
+      - name: Install Playwright browsers
+        shell: pwsh
+        run: npx.cmd playwright install
 
       # ── Configure CLEAN / BUGGY target environment ────────────────────────
       #
@@ -154,7 +155,7 @@ jobs:
           Write-Host "UI Base URL : $env:UI_BASE_URL"
           Write-Host "API Base URL: $env:API_BASE_URL"
           Write-Host "Browser     : Playwright Chromium"
-          Write-Host "Runner      : GitHub Hosted - Ubuntu"
+          Write-Host "Runner      : GitHub Hosted - Windows"
           Write-Host "=========================================="
 
       # ── Run API + UI Playwright regression suite ──────────────────────────
@@ -178,7 +179,8 @@ jobs:
       #   - trace on first retry
       #
       - name: Run Playwright regression suite
-        run: npm test
+        shell: pwsh
+        run: npm.cmd test
 
       # ── Upload Playwright HTML report ─────────────────────────────────────
       #
