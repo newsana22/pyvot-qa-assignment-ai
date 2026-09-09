@@ -4,7 +4,7 @@
 const { defineConfig, devices } = require('@playwright/test');
 
 // Environment-driven base URLs so the SAME suite/assertions can run against
-// CLEAN or BUGGY simply by changing these values (see test-strategy.md §10.7).
+// CLEAN or BUGGY simply by changing these environment variables.
 const UI_BASE_URL =
   process.env.UI_BASE_URL || 'https://practicesoftwaretesting.com';
 
@@ -20,11 +20,12 @@ module.exports = defineConfig({
   forbidOnly: !!process.env.CI,
 
   // Retry a failed test once in CI.
-  // Locally, no automatic retry is used.
+  // Locally and in Docker, no automatic retry is used unless CI=true.
   retries: process.env.CI ? 1 : 0,
 
   // Use one worker in CI for more stable execution.
-  // Local execution can use Playwright's normal worker behavior.
+  // Local and Docker execution can use Playwright's normal worker behavior
+  // unless the command explicitly passes --workers=1.
   workers: process.env.CI ? 1 : undefined,
 
   // Generate both an HTML report and readable console output.
@@ -41,7 +42,7 @@ module.exports = defineConfig({
     timeout: 10_000,
   },
 
-  // Common settings applied to Playwright projects.
+  // Common settings applied to all Playwright projects.
   use: {
 
     // Capture a trace on the first retry.
@@ -79,29 +80,28 @@ module.exports = defineConfig({
 
       use: {
 
-        // Use Playwright's standard Desktop Chrome browser/device settings.
-        ...devices['Desktop Chrome'],
-
         /*
-         * NEW CI BROWSER CHANGE
-         * ---------------------
-         * Previously Playwright used its bundled Chromium browser.
+         * Use Playwright's standard Desktop Chrome device profile.
          *
-         * We are now explicitly asking Playwright to launch the installed
-         * Google Chrome browser.
+         * Important:
+         * devices['Desktop Chrome'] provides browser context settings such as
+         * viewport, user agent and desktop behaviour.
          *
-         * The purpose of this experiment is to check whether the Cloudflare
-         * security verification seen on the GitHub-hosted runner behaves
-         * differently when the test uses real Google Chrome instead of the
-         * Playwright Chromium build.
+         * We are NOT using:
          *
-         * This does NOT bypass Cloudflare and does NOT change any test
-         * assertion or expected application behaviour.
+         *   channel: 'chrome'
          *
-         * If Cloudflare still challenges the GitHub-hosted runner, the tests
-         * will continue to fail normally and preserve the true CI evidence.
+         * Therefore Playwright will use its bundled Chromium browser engine.
+         *
+         * This keeps browser execution consistent across:
+         * - Local execution
+         * - Docker
+         * - GitHub Actions / self-hosted CI
+         *
+         * It also avoids requiring a separately installed Google Chrome binary
+         * inside the Docker container.
          */
-        channel: 'chrome',
+        ...devices['Desktop Chrome'],
 
         // Base URL used by UI tests.
         baseURL: UI_BASE_URL,

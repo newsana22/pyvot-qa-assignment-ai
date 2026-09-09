@@ -1,0 +1,97 @@
+# ============================================================
+# Pyvot QA Assignment - Playwright Automation Docker Image
+#
+# Purpose:
+#   Run the same Playwright API + UI regression suite against
+#   either the CLEAN or BUGGY Toolshop environment.
+#
+# Browser:
+#   Uses Playwright-managed Chromium.
+#   Google Chrome is NOT required.
+# ============================================================
+
+# Official Microsoft Playwright image.
+# Version matches @playwright/test 1.53.1 used by this project.
+FROM mcr.microsoft.com/playwright:v1.53.1-noble
+
+# All Playwright automation files are copied under /app.
+WORKDIR /app
+
+# ------------------------------------------------------------
+# Install project dependencies
+# ------------------------------------------------------------
+
+# Copy dependency files first so Docker can reuse the npm layer
+# when only test/framework files change.
+COPY package.json package-lock.json ./
+
+# Install exact dependency versions from package-lock.json.
+RUN npm ci
+
+# ------------------------------------------------------------
+# Copy Playwright automation framework
+# ------------------------------------------------------------
+
+COPY playwright.config.js ./
+
+COPY tests ./tests
+COPY pages ./pages
+COPY utils ./utils
+COPY fixtures ./fixtures
+COPY data ./data
+
+# Shared environment/helper scripts used by the QA framework.
+COPY scripts ./scripts
+
+# ------------------------------------------------------------
+# Environment configuration
+# ------------------------------------------------------------
+#
+# CLEAN is the default Docker execution environment.
+#
+# These values can be overridden at docker run time.
+#
+# CLEAN:
+#   TEST_ENVIRONMENT=CLEAN
+#   UI_BASE_URL=https://practicesoftwaretesting.com
+#   API_BASE_URL=https://api.practicesoftwaretesting.com
+#
+# BUGGY:
+#   TEST_ENVIRONMENT=BUGGY
+#   UI_BASE_URL=https://with-bugs.practicesoftwaretesting.com
+#   API_BASE_URL=https://api-with-bugs.practicesoftwaretesting.com
+#
+# The SAME tests and assertions are used against both
+# environments. Only the target URLs change.
+# ------------------------------------------------------------
+
+ENV TEST_ENVIRONMENT=CLEAN
+
+ENV UI_BASE_URL=https://practicesoftwaretesting.com
+
+ENV API_BASE_URL=https://api.practicesoftwaretesting.com
+
+# ------------------------------------------------------------
+# Playwright browser behaviour
+# ------------------------------------------------------------
+#
+# playwright.config.js does NOT use:
+#
+#   channel: 'chrome'
+#
+# Therefore Playwright launches the Chromium browser already
+# provided by the official Playwright Docker image.
+#
+# No separate Google Chrome installation is required.
+# ------------------------------------------------------------
+
+# ------------------------------------------------------------
+# Default container command
+# ------------------------------------------------------------
+#
+# Runs the complete API + UI Playwright regression suite.
+#
+# One worker is used for stable and reproducible execution.
+# ------------------------------------------------------------
+
+CMD ["npx", "playwright", "test", "--config=playwright.config.js", "--workers=1"]

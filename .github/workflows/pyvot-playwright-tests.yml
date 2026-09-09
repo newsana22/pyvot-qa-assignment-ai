@@ -13,15 +13,18 @@
 #   - Push-triggered runs use CLEAN by default
 #   - Manual runs allow CLEAN or BUGGY to be selected
 #   - The SAME Playwright tests and assertions run against both environments
-#   - Only UI_BASE_URL and API_BASE_URL change
+#   - CLEAN/BUGGY URLs are maintained in:
+#       scripts/configure-test-environment.ps1
+#
+# BROWSER:
+#   - Uses Playwright's managed Chromium browser
+#   - Does NOT require separately installed Google Chrome
 #
 # NOTES:
 #   - Runs sequentially with 1 worker for stable CI execution
 #   - Keeps this QA pipeline separate from the original Toolshop workflows
-#   - Uses Google Chrome for UI execution because playwright.config.js sets:
-#       channel: 'chrome'
-#   - Installs Playwright-managed browser/support binaries and Linux
-#     dependencies, including FFmpeg required for retained failure videos
+#   - Installs Playwright browser/support binaries and Linux dependencies
+#   - Includes FFmpeg required for retained failure videos
 # ══════════════════════════════════════════════════════════════════════════════
 
 name: Pyvot QA - Playwright Regression
@@ -32,7 +35,7 @@ on:
       - main
       - pyvot-assignment-feature
 
-  # Manual execution allows the tester to choose the target environment.
+  # Manual execution allows the tester to choose CLEAN or BUGGY.
   workflow_dispatch:
     inputs:
       environment:
@@ -44,6 +47,7 @@ on:
           - clean
           - buggy
 
+# Prevent multiple executions of the same branch from running unnecessarily.
 concurrency:
   group: pyvot-playwright-${{ github.ref }}
   cancel-in-progress: true
@@ -52,12 +56,18 @@ env:
   NODE_VERSION: '22'
 
 jobs:
+
   playwright:
+
     name: Run Pyvot Playwright Tests
+
+    # GitHub-hosted Linux runner.
     runs-on: ubuntu-latest
+
     timeout-minutes: 30
 
     steps:
+
       # ── Checkout repository ────────────────────────────────────────────────
       - name: Checkout code
         uses: actions/checkout@v4
@@ -70,108 +80,100 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
 
-      # ── Install exact dependencies from package-lock.json ─────────────────
+      # ── Install exact project dependencies ────────────────────────────────
+      #
+      # npm ci uses package-lock.json so CI installs the exact dependency
+      # versions committed in the repository.
+      #
       - name: Install dependencies
         run: npm ci
 
-      # ── Install Playwright browser/support binaries + Linux dependencies ──
+      # ── Install Playwright browser binaries + Linux dependencies ──────────
       #
-      # NEW FIX:
-      # The previous CI run used:
+      # Installs Playwright-managed browsers including Chromium.
       #
-      #   npx playwright install-deps
+      # It also installs:
+      #   - required Linux dependencies
+      #   - Playwright support binaries
+      #   - FFmpeg used for retained failure videos
       #
-      # That installed Linux system dependencies but did NOT install all
-      # Playwright-managed support binaries required by the test framework.
-      #
-      # The UI tests failed before browser execution because FFmpeg was missing:
-      #
-      #   Executable doesn't exist at .../ms-playwright/ffmpeg-1011/ffmpeg-linux
-      #
-      # FFmpeg is required because the Playwright configuration retains video
-      # evidence for failed UI tests.
-      #
-      # This command installs the Playwright-managed binaries, including FFmpeg,
-      # together with the required Linux dependencies.
-      #
-      # playwright.config.js still launches Google Chrome using:
+      # playwright.config.js does NOT specify:
       #
       #   channel: 'chrome'
+      #
+      # Therefore Playwright uses its managed Chromium browser.
       #
       - name: Install Playwright browsers and dependencies
         run: npx playwright install --with-deps
 
-      # ── Resolve CLEAN / BUGGY target environment ──────────────────────────
+      # ── Configure CLEAN / BUGGY target environment ────────────────────────
       #
-      # NEW PARAMETERIZATION:
+      # The URLs are maintained in one reusable PowerShell script:
       #
-      # Manual workflow runs can select:
+      #   scripts/configure-test-environment.ps1
+      #
+      # Manual runs provide:
       #   clean
       #   buggy
       #
-      # Push-triggered runs do not provide workflow_dispatch inputs,
-      # therefore CLEAN is automatically used as the default baseline.
+      # Push-triggered executions do not have a workflow_dispatch input,
+      # therefore CLEAN is selected as the default baseline.
       #
-      # The chosen URLs are written to GITHUB_ENV so all later Playwright
-      # steps use the correct UI and API environment.
+      # The script writes:
+      #
+      #   TEST_ENVIRONMENT
+      #   UI_BASE_URL
+      #   API_BASE_URL
+      #
+      # to GITHUB_ENV so later workflow steps can use them.
       #
       - name: Configure test environment
-        shell: bash
+        shell: pwsh
         run: |
-          TARGET_ENV="${{ github.event.inputs.environment }}"
+          $targetEnvironment = "${{ github.event.inputs.environment }}"
 
-          # Push events have no manual environment input.
-          # CLEAN is therefore the default CI baseline.
-          if [ -z "$TARGET_ENV" ]; then
-            TARGET_ENV="clean"
-          fi
+          # Push-triggered runs do not provide a manual environment input.
+          if ([string]::IsNullOrWhiteSpace($targetEnvironment)) {
+            $targetEnvironment = "clean"
+          }
 
-          if [ "$TARGET_ENV" = "buggy" ]; then
-
-            echo "TEST_ENVIRONMENT=BUGGY" >> "$GITHUB_ENV"
-
-            echo "UI_BASE_URL=https://with-bugs.practicesoftwaretesting.com" >> "$GITHUB_ENV"
-
-            echo "API_BASE_URL=https://api-with-bugs.practicesoftwaretesting.com" >> "$GITHUB_ENV"
-
-          else
-
-            echo "TEST_ENVIRONMENT=CLEAN" >> "$GITHUB_ENV"
-
-            echo "UI_BASE_URL=https://practicesoftwaretesting.com" >> "$GITHUB_ENV"
-
-            echo "API_BASE_URL=https://api.practicesoftwaretesting.com" >> "$GITHUB_ENV"
-
-          fi
+          ./scripts/configure-test-environment.ps1 `
+            -Environment $targetEnvironment
 
       # ── Display selected environment ──────────────────────────────────────
       #
-      # This makes the CI log explicitly show which environment was executed.
+      # Makes the selected execution environment visible in the CI logs.
       #
       - name: Display selected environment
-        shell: bash
+        shell: pwsh
         run: |
-          echo "=========================================="
-          echo "Pyvot Playwright Test Environment"
-          echo "=========================================="
-          echo "Environment : $TEST_ENVIRONMENT"
-          echo "UI Base URL : $UI_BASE_URL"
-          echo "API Base URL: $API_BASE_URL"
-          echo "=========================================="
+          Write-Host "=========================================="
+          Write-Host "Pyvot Playwright Regression"
+          Write-Host "=========================================="
+          Write-Host "Environment : $env:TEST_ENVIRONMENT"
+          Write-Host "UI Base URL : $env:UI_BASE_URL"
+          Write-Host "API Base URL: $env:API_BASE_URL"
+          Write-Host "Browser     : Playwright Chromium"
+          Write-Host "Runner      : GitHub Hosted - Ubuntu"
+          Write-Host "=========================================="
 
-      # ── Run assignment API + UI regression suite ──────────────────────────
+      # ── Run API + UI Playwright regression suite ──────────────────────────
       #
       # package.json:
       #
       #   npm test
-      #   → playwright test --config=playwright.config.js --workers=1
       #
-      # The SAME test suite and assertions are used for CLEAN and BUGGY.
+      # which executes:
+      #
+      #   playwright test --config=playwright.config.js --workers=1
+      #
+      # The SAME suite and assertions are executed against CLEAN and BUGGY.
       #
       # playwright.config.js also provides:
+      #
       #   - CI retry = 1
       #   - HTML + line reporters
-      #   - screenshots on failure
+      #   - screenshot on failure
       #   - video retained on failure
       #   - trace on first retry
       #
@@ -180,15 +182,38 @@ jobs:
 
       # ── Upload Playwright HTML report ─────────────────────────────────────
       #
-      # Always upload the report even if regression tests fail.
+      # The report is uploaded even when tests fail.
       #
-      # The artifact name includes the selected environment so CLEAN and BUGGY
-      # execution evidence can be distinguished easily.
+      # Artifact example:
+      #
+      #   pyvot-CLEAN-playwright-report-123456789
+      #
+      # or:
+      #
+      #   pyvot-BUGGY-playwright-report-123456789
       #
       - name: Upload Playwright HTML report
-        uses: actions/upload-artifact@v4
         if: always()
+        uses: actions/upload-artifact@v4
         with:
           name: pyvot-${{ env.TEST_ENVIRONMENT }}-playwright-report-${{ github.run_id }}
           path: playwright-report/
+          if-no-files-found: ignore
+          retention-days: 30
+
+      # ── Upload Playwright raw test evidence ───────────────────────────────
+      #
+      # Includes available failure artifacts such as:
+      #
+      #   - screenshots
+      #   - traces
+      #   - videos
+      #
+      - name: Upload Playwright test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pyvot-${{ env.TEST_ENVIRONMENT }}-test-results-${{ github.run_id }}
+          path: test-results/
+          if-no-files-found: ignore
           retention-days: 30

@@ -1,8 +1,39 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# Pyvot Assignment - Playwright QA Regression (Self-Hosted Windows Runner)
+#
+# PURPOSE:
+#   Runs the assignment-owned Playwright API + UI regression suite using a
+#   Windows self-hosted GitHub Actions runner.
+#
+# TRIGGER:
+#   - Manual execution only
+#
+# SECURITY:
+#   - This repository is public
+#   - The workflow is intentionally manual because it executes on a
+#     personal self-hosted machine
+#
+# ENVIRONMENT BEHAVIOUR:
+#   - Manual runs allow CLEAN or BUGGY to be selected
+#   - The SAME Playwright tests and assertions run against both environments
+#   - CLEAN/BUGGY URLs are maintained centrally in:
+#       scripts/configure-test-environment.ps1
+#
+# BROWSER:
+#   - Uses Playwright's managed Chromium browser
+#   - Does NOT require separately installed Google Chrome
+#
+# NOTES:
+#   - Keeps this QA pipeline separate from the original Toolshop workflows
+#   - Uses the same environment configuration as the hosted CI workflow
+#   - Uploads Playwright HTML report and raw failure evidence
+# ══════════════════════════════════════════════════════════════════════════════
+
 name: Pyvot QA - Self-Hosted Regression
 
-# Manual execution only.
-# Important because the repository is public and this job runs on a personal machine.
 on:
+
+  # Manual execution only.
   workflow_dispatch:
     inputs:
       environment:
@@ -14,68 +45,136 @@ on:
           - clean
           - buggy
 
+env:
+  NODE_VERSION: "22"
+
 jobs:
+
   playwright-tests:
+
     name: Run Playwright Tests - Self Hosted
 
+    # Execute only on the registered Windows x64 self-hosted runner.
     runs-on: [self-hosted, Windows, X64]
 
-    env:
-      NODE_VERSION: "22"
+    timeout-minutes: 30
 
     steps:
+
+      # ── Checkout repository ────────────────────────────────────────────────
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # ── Setup Node.js ─────────────────────────────────────────────────────
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
+          cache-dependency-path: package-lock.json
 
+      # ── Install exact project dependencies ────────────────────────────────
+      #
+      # npm ci installs the dependency versions committed in package-lock.json.
+      #
       - name: Install project dependencies
+        shell: pwsh
         run: npm.cmd ci
 
-      # Installs Playwright-managed browser support binaries such as FFmpeg.
-      - name: Install Playwright browser support
+      # ── Install Playwright-managed browser binaries ───────────────────────
+      #
+      # Installs Playwright-managed Chromium and support binaries such as
+      # FFmpeg used for retained failure videos.
+      #
+      # playwright.config.js does NOT use:
+      #
+      #   channel: 'chrome'
+      #
+      # Therefore UI tests use Playwright's managed Chromium browser.
+      #
+      - name: Install Playwright browsers
+        shell: pwsh
         run: npx.cmd playwright install
 
+      # ── Configure CLEAN / BUGGY target environment ────────────────────────
+      #
+      # Environment URLs are maintained centrally in:
+      #
+      #   scripts/configure-test-environment.ps1
+      #
+      # The script writes:
+      #
+      #   TEST_ENVIRONMENT
+      #   UI_BASE_URL
+      #   API_BASE_URL
+      #
+      # to GITHUB_ENV so subsequent workflow steps receive the selected
+      # environment automatically.
+      #
       - name: Configure test environment
-        shell: powershell
+        shell: pwsh
         run: |
-          if ("${{ github.event.inputs.environment }}" -eq "buggy") {
-            "TEST_ENVIRONMENT=BUGGY" | Out-File -FilePath $env:GITHUB_ENV -Append
-            "UI_BASE_URL=https://with-bugs.practicesoftwaretesting.com" | Out-File -FilePath $env:GITHUB_ENV -Append
-            "API_BASE_URL=https://api-with-bugs.practicesoftwaretesting.com" | Out-File -FilePath $env:GITHUB_ENV -Append
-          }
-          else {
-            "TEST_ENVIRONMENT=CLEAN" | Out-File -FilePath $env:GITHUB_ENV -Append
-            "UI_BASE_URL=https://practicesoftwaretesting.com" | Out-File -FilePath $env:GITHUB_ENV -Append
-            "API_BASE_URL=https://api.practicesoftwaretesting.com" | Out-File -FilePath $env:GITHUB_ENV -Append
-          }
+          ./scripts/configure-test-environment.ps1 `
+            -Environment "${{ github.event.inputs.environment }}"
 
+      # ── Display selected environment ──────────────────────────────────────
+      #
+      # Makes the execution configuration visible in GitHub Actions logs.
+      #
       - name: Display selected environment
-        shell: powershell
+        shell: pwsh
         run: |
-          Write-Host "Environment: $env:TEST_ENVIRONMENT"
-          Write-Host "UI Base URL: $env:UI_BASE_URL"
+          Write-Host "=========================================="
+          Write-Host "Pyvot Self-Hosted Regression"
+          Write-Host "=========================================="
+          Write-Host "Environment : $env:TEST_ENVIRONMENT"
+          Write-Host "UI Base URL : $env:UI_BASE_URL"
           Write-Host "API Base URL: $env:API_BASE_URL"
+          Write-Host "Browser     : Playwright Chromium"
+          Write-Host "Runner      : Self-Hosted Windows X64"
+          Write-Host "=========================================="
 
+      # ── Run API + UI Playwright regression suite ──────────────────────────
+      #
+      # package.json:
+      #
+      #   npm test
+      #
+      # executes:
+      #
+      #   playwright test --config=playwright.config.js --workers=1
+      #
+      # The SAME tests and assertions are executed against CLEAN and BUGGY.
+      #
       - name: Run API and UI Playwright tests
+        shell: pwsh
         run: npm.cmd test
 
+      # ── Upload Playwright HTML report ─────────────────────────────────────
+      #
+      # Always upload the HTML report, including when regression tests fail.
+      #
       - name: Upload Playwright HTML report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: pyvot-self-hosted-${{ env.TEST_ENVIRONMENT }}-playwright-report-${{ github.run_id }}
           path: playwright-report/
-          retention-days: 7
+          if-no-files-found: ignore
+          retention-days: 30
 
+      # ── Upload Playwright raw test evidence ───────────────────────────────
+      #
+      # Contains available failure evidence such as:
+      #   - screenshots
+      #   - traces
+      #   - videos
+      #
       - name: Upload Playwright test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: pyvot-self-hosted-${{ env.TEST_ENVIRONMENT }}-test-results-${{ github.run_id }}
           path: test-results/
-          retention-days: 7
+          if-no-files-found: ignore
+          retention-days: 30
